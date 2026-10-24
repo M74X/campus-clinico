@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Artefactos de QA temporales
+img/_check_*.png
+
+# Datos institucionales (por definición nunca en el repo)
+*.xlsx
+*.xls
+*.csv
+
+# Sistema / editor
+Thumbs.db
+.DS_Store
+*.swp
