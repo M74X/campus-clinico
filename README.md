@@ -17,7 +17,10 @@ Campo-Clinico/
 ├── scripts/
 │   ├── qr_poster.py      → genera sticker QR (banner) + poster impreso
 │   ├── pegar_qr_banner.py→ pega el sticker en el banner de diseño
-│   └── validar_base.py   → auditoría del Excel (agregados, sin PII)
+│   ├── validar_base.py   → auditoría del Excel (agregados, sin PII)
+│   └── cruces_horario.py → detecta alumnos con cruce de horario/día
+│                            entre sedes de distritos distintos y genera
+│                            reporte Excel (7 hojas)
 └── img/
     ├── banner-campo-clinico-2026ii.png   ★ banner final con QR real
     ├── campo-clinico-banner.png          → sticker QR solo (marco azul + W)
@@ -71,6 +74,12 @@ python -m pip install segno zxing-cpp pillow openpyxl
 
 # Auditoría de la base (agregados; no imprime datos personales)
 python scripts/validar_base.py ruta/OPTIONAL.xlsx
+
+# Cruces de horario: 77 alumnos con clases imposibles el mismo día.
+# Genera cruces_horario.xlsx (RESUMEN, CRUCES DETALLE, ALUMNOS AFECTADOS,
+# POR DIA, POR SEDES, POR CURSO, MATRIZ VIAJES). Zonas y tiempos de viaje
+# de Lima configurables en ZONA_SEDE / TRAVEL_ZONAS.
+python scripts/cruces_horario.py ruta/OPTIONAL.xlsx [salida.xlsx]
 
 # QRs: sticker banner + poster (batería zxing integrada, ECC H)
 python scripts/qr_poster.py <URL_APP> [salida_base] [sin-logo]
