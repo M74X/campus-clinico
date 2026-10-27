@@ -22,6 +22,47 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+// ─── CONFIGURACIÓN DE FE DE ERRATAS ──────────────────────────────────────────
+var FE_ERRATAS_ACTIVO = true;
+var FE_ERRATAS_HASTA = '19/12/2026';
+
+var FE_ERRATAS_GRUPOS = [
+  {
+    mensaje: 'Fe de erratas: se informa que hubo una actualización en su curso de Cirugía General. Por favor, revisar la información actualizada.',
+    alumnos: [
+      { codigo: '2021103183', curso: 'MH3102' },
+      { codigo: '2021100095', curso: 'MH3102' },
+      { codigo: '2020201396', curso: 'MH3102' },
+      { codigo: '2022101334', curso: 'MH3102' },
+      { codigo: '2021201284', curso: 'MH3102' },
+      { codigo: '2022104590', curso: 'MH3102' },
+      { codigo: '2022105199', curso: 'MH3102' },
+      { codigo: '2020201744', curso: 'MH3102' },
+      { codigo: '2021200831', curso: 'MH3102' },
+      { codigo: '2021100792', curso: 'MH3102' },
+      { codigo: '2022102731', curso: 'MH3102' },
+      { codigo: '2022105154', curso: 'MH3102' },
+      { codigo: '2022100420', curso: 'MH3102' },
+      { codigo: '2022101449', curso: 'MH3102' },
+      { codigo: '2022101210', curso: 'MH3102' },
+      { codigo: '2022100595', curso: 'MH3102' },
+      { codigo: '2022101136', curso: 'MH3102' },
+      { codigo: '2022103061', curso: 'MH3102' },
+      { codigo: '2022100624', curso: 'MH3102' },
+      { codigo: '2020202148', curso: 'MH3102' }
+    ]
+  },
+  {
+    mensaje: 'Debido a que se detectó un cruce, se actualizó la programación del curso de {CURSO}.',
+    alumnos: [
+      { codigo: '2022100236', curso: 'MH3103' },
+      { codigo: '2022101341', curso: 'MH3102' },
+      { codigo: '2022104438', curso: 'MH3101' },
+      { codigo: '2022200566', curso: 'MH3084' }
+    ]
+  }
+];
+
 // ─── CONFIGURACIÓN DE HOJA Y COLUMNAS ─────────────────────────────────────────
 // Si cambian los nombres en el Excel, solo hay que tocar esta sección.
 // Todo se compara normalizado: sin tildes, en mayúsculas y sin espacios sobrantes.
@@ -163,6 +204,40 @@ function leerFila(fila, col) {
   return f;
 }
 
+// ─── FE DE ERRATAS (HELPER) ───────────────────────────────────────────────────
+
+function obtenerConfigFeErratas(codigo) {
+  if (!FE_ERRATAS_ACTIVO) return null;
+
+  if (FE_ERRATAS_HASTA) {
+    var limite = FE_ERRATAS_HASTA instanceof Date ? FE_ERRATAS_HASTA : parsearFecha(FE_ERRATAS_HASTA);
+    if (limite && !isNaN(limite)) {
+      var limiteFin = new Date(limite.getTime());
+      if (limiteFin.getHours() === 0 && limiteFin.getMinutes() === 0 && limiteFin.getSeconds() === 0) {
+        limiteFin.setHours(23, 59, 59, 999);
+      }
+      if (new Date() > limiteFin) return null;
+    }
+  }
+
+  var codNorm = (codigo || '').toString().trim();
+  if (!codNorm) return null;
+
+  for (var i = 0; i < FE_ERRATAS_GRUPOS.length; i++) {
+    var grp = FE_ERRATAS_GRUPOS[i];
+    var alumnos = grp.alumnos || [];
+    for (var j = 0; j < alumnos.length; j++) {
+      if ((alumnos[j].codigo || '').toString().trim() === codNorm) {
+        return {
+          mensaje: grp.mensaje,
+          cursoCodigo: (alumnos[j].curso || '').toString().trim()
+        };
+      }
+    }
+  }
+  return null;
+}
+
 // ─── BÚSQUEDA ─────────────────────────────────────────────────────────────────
 
 // Cualquier fila con el código del alumno es un curso asignado. Si la misma
@@ -182,6 +257,8 @@ function buscarEnHoja(hoja, codigoBuscar) {
   var nombre = '';
   var cursos = [];
   var vistos = {};
+  var configFe = obtenerConfigFeErratas(codigoBuscar);
+  var nombreCursoFe = '';
 
   for (var j = filaEnc + 1; j < datos.length; j++) {
     if (limpiarCodigo(datos[j][col.codigo]) !== codigoBuscar) continue;
@@ -189,6 +266,14 @@ function buscarEnHoja(hoja, codigoBuscar) {
 
     if (!nombre) nombre = f.nombre;
     if (!f.curso) continue;
+
+    if (configFe && configFe.cursoCodigo && !nombreCursoFe) {
+      var cursoNorm = normalizar(f.curso);
+      var codCursoNorm = normalizar(configFe.cursoCodigo);
+      if (cursoNorm.indexOf(codCursoNorm) === 0) {
+        nombreCursoFe = partirCurso(f.curso).nombre;
+      }
+    }
 
     var curso = partirCurso(f.curso);
     // Clave de deduplicación: la asignación completa de la fila
@@ -209,7 +294,12 @@ function buscarEnHoja(hoja, codigoBuscar) {
   }
 
   if (!nombre || !cursos.length) return null;
-  return { encontrado: true, nombre: nombre, cursos: cursos };
+  var resultado = { encontrado: true, nombre: nombre, cursos: cursos };
+  if (configFe) {
+    var cursoReemplazo = nombreCursoFe || 'su curso';
+    resultado.feErratas = configFe.mensaje.replace(/\{CURSO\}/g, cursoReemplazo);
+  }
+  return resultado;
 }
 
 // ─── ENTRY POINT ──────────────────────────────────────────────────────────────

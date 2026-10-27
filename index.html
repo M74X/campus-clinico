@@ -220,6 +220,61 @@
       color: #c03030;
     }
 
+    /* ── Banner de Fe de Erratas ── */
+    .banner-aviso {
+      background: #FFFBEB;
+      border: 1px solid #FCD34D;
+      border-left: 5px solid #F59E0B;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 1.25rem;
+      width: 100%;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .banner-aviso-cuerpo {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .banner-aviso-cuerpo svg {
+      flex: none;
+      width: 22px;
+      height: 22px;
+      fill: #D97706;
+      margin-top: 1px;
+    }
+
+    .banner-aviso-texto {
+      font-size: 14.5px;
+      color: #92400E;
+      line-height: 1.45;
+      font-weight: 500;
+      flex: 1;
+    }
+
+    .banner-aviso-btn {
+      align-self: flex-end;
+      width: auto !important;
+      padding: 6px 16px !important;
+      background: #D97706 !important;
+      color: #ffffff !important;
+      border: none !important;
+      border-radius: 6px !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      transition: background 0.2s !important;
+    }
+
+    .banner-aviso-btn:hover {
+      background: #B45309 !important;
+    }
+
     @media (max-width: 600px) {
       main { padding: 1rem 0.75rem; align-items: flex-start; }
       .card { padding: 1.25rem 1rem; border-radius: 10px; }
@@ -268,6 +323,17 @@
 
     <!-- ── Pantalla 2: asignación ── -->
     <div id="pantalla-resultado" style="display:none; width:100%; max-width:640px;">
+      <!-- Banner Fe de Erratas -->
+      <div id="banner-fe-erratas" class="banner-aviso" role="alert" style="display:none;">
+        <div class="banner-aviso-cuerpo">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+          </svg>
+          <div id="banner-fe-erratas-texto" class="banner-aviso-texto"></div>
+        </div>
+        <button type="button" class="banner-aviso-btn" onclick="cerrarAviso()">Entendido</button>
+      </div>
+
       <p class="estudiante-label">Estudiante:</p>
       <p class="estudiante-nombre" id="estudiante-nombre"></p>
       <p class="estudiante-subtitulo">Te informamos que tu <strong>experiencia de campo clínico</strong> está lista. Revisa los detalles a continuación:</p>
@@ -314,6 +380,11 @@
         .buscarAlumno(codigo);
     }
 
+    function cerrarAviso() {
+      var banner = document.getElementById('banner-fe-erratas');
+      if (banner) banner.style.display = 'none';
+    }
+
     function mostrarResultado(data) {
       var btn = document.getElementById('btn');
       btn.disabled = false;
@@ -322,6 +393,15 @@
       if (!data || !data.encontrado) {
         document.getElementById('result-no-encontrado').style.display = 'block';
         return;
+      }
+
+      var banner = document.getElementById('banner-fe-erratas');
+      var bannerTexto = document.getElementById('banner-fe-erratas-texto');
+      if (data.feErratas) {
+        bannerTexto.textContent = data.feErratas;
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
       }
 
       document.getElementById('estudiante-nombre').textContent = data.nombre;
@@ -367,6 +447,8 @@
     }
 
     function nuevaConsulta() {
+      var banner = document.getElementById('banner-fe-erratas');
+      if (banner) banner.style.display = 'none';
       document.getElementById('pantalla-resultado').style.display = 'none';
       document.getElementById('pantalla-consulta').style.display = 'block';
       document.getElementById('codigo').value = '';
