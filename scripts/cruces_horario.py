@@ -194,6 +194,13 @@ def dia_estandar(d):
     return d
 
 
+def curso_canonico(curso):
+    """Quita el codigo de curso: 'MH3103 NEUROLOGIA' y 'NEUROLOGIA'
+    (mismo curso con o sin codigo en el Excel) se comparan igual."""
+    s = normalizar(curso)
+    return re.sub(r"^[A-Z]{2,4}\s?\d{3,4}\s+", "", s).strip()
+
+
 def buscar_archivo():
     if len(sys.argv) > 1:
         return Path(sys.argv[1])
@@ -227,6 +234,7 @@ def columnas_de(ws):
 def leer_sesiones(ws, col, fila_enc):
     """{codigo: {nombre, ciclo, sesiones[]}} + orden de aparición."""
     alumnos, orden = {}, []
+    duplicadas = 0
     for fila in ws.iter_rows(min_row=fila_enc + 1, values_only=True):
         if all(v is None or str(v).strip() == "" for v in fila):
             continue
@@ -242,17 +250,25 @@ def leer_sesiones(ws, col, fila_enc):
             continue                    # fila sin horario parseable: no cruza
         if codigo not in alumnos:
             alumnos[codigo] = {"nombre": valor("nombre"),
-                               "ciclo": valor("ciclo"), "sesiones": []}
+                               "ciclo": valor("ciclo"), "sesiones": [],
+                               "firmas": set()}
             orden.append(codigo)
         if valor("nombre") and not alumnos[codigo]["nombre"]:
             alumnos[codigo]["nombre"] = valor("nombre")
+        firma = (curso_canonico(valor("curso")),
+                 normalizar(valor("seccion")), normalizar(valor("sede")),
+                 normalizar(valor("docente")), dia, rango[0], rango[1])
+        if firma in alumnos[codigo]["firmas"]:
+            duplicadas += 1             # fila repetida: misma asignacion
+            continue
+        alumnos[codigo]["firmas"].add(firma)
         alumnos[codigo]["sesiones"].append({
             "dia": dia, "ini": rango[0], "fin": rango[1],
             "horario": horario_raw, "curso": valor("curso"),
             "seccion": valor("seccion"), "sede": valor("sede"),
             "red": valor("red"), "docente": valor("docente"),
         })
-    return alumnos, orden
+    return alumnos, orden, duplicadas
 
 
 def cruces_de(alumno):
@@ -261,11 +277,15 @@ def cruces_de(alumno):
     for s in alumno["sesiones"]:
         por_dia[s["dia"]].append(s)
 
-    salida = []
+    salida, descartados = [], 0
     for dia, lista in sorted(por_dia.items()):
         for i in range(len(lista)):
             for j in range(i + 1, len(lista)):
                 a, b = lista[i], lista[j]
+                if (curso_canonico(a["curso"]) == curso_canonico(b["curso"])
+                        and normalizar(a["sede"]) == normalizar(b["sede"])):
+                    descartados += 1   # misma clase, no un cruce
+                    continue
                 solape = solapamiento((a["ini"], a["fin"]),
                                       (b["ini"], b["fin"]))
                 gap = gap_minutos((a["ini"], a["fin"]),
@@ -287,7 +307,7 @@ def cruces_de(alumno):
                     "solape": solape, "gap": gap, "viaje": viaje,
                     "sedes_distintas": sedes_distintas,
                 })
-    return salida
+    return salida, descartados
 
 
 SEV_ORDEN = {"CRITICO": 0, "INVIABLE": 1, "AJUSTADO": 2}
@@ -501,7 +521,8 @@ def hoja_matriz(wb):
                   "script para ajustar.").font = Font(size=8, italic=True)
 
 
-def generar_excel(salida, filas, alumnos, n_sesiones):
+def generar_excel(salida, filas, alumnos, n_sesiones,
+                  duplicadas=0, descartados=0):
     wb = openpyxl.Workbook()
     hoja_detalle(wb, filas)
     hoja_alumnos(wb, filas)
@@ -524,11 +545,13 @@ def generar_excel(salida, filas, alumnos, n_sesiones):
     datos = [
         ("Base analizada", alumnos and f"{len(alumnos)} alumnos · "
          f"{n_sesiones} sesiones"),
+        ("Filas duplicadas colapsadas (misma asignacion)", duplicadas),
         ("Alumnos con al menos un cruce", con_cruce),
         ("Pares de sesiones en conflicto", len(filas)),
         ("  CRÍTICO — solapamiento de horas", len(criticos)),
         ("  INVIABLE — no alcanza a viajar entre sedes", len(inviables)),
         ("  AJUSTADO — 2 distritos, día cargado", len(ajustados)),
+        ("Pares descartados - mismo curso y misma sede", descartados),
         ("Pares entre sedes DISTINTAS (distritos diferentes)",
          sum(1 for f in filas if f["sedes_distintas"])),
         ("Pares dentro de la MISMA sede",
@@ -575,13 +598,16 @@ def main():
                          'CODIGO ALUMNO + CURSO.')
     print(f'Hoja "{hoja.title}": cabecera en fila {fila_enc}')
 
-    alumnos, orden = leer_sesiones(hoja, col, fila_enc)
+    alumnos, orden, duplicadas = leer_sesiones(hoja, col, fila_enc)
     n_sesiones = sum(len(a["sesiones"]) for a in alumnos.values())
 
     filas = []
+    descartados = 0
     for codigo in orden:
         a = alumnos[codigo]
-        for cruce in cruces_de(a):
+        cruces, desc = cruces_de(a)
+        descartados += desc
+        for cruce in cruces:
             filas.append({"codigo": codigo, "nombre": a["nombre"],
                           "ciclo": a["ciclo"], **cruce})
     filas.sort(key=lambda f: (SEV_ORDEN[sev_de(f["tipo"])],
@@ -593,11 +619,14 @@ def main():
     ajustados = sum(1 for f in filas if f["tipo"].startswith("AJUSTADO"))
     con_cruce = len({f["codigo"] for f in filas})
 
-    print(f"\nAlumnos evaluados: {len(alumnos)} | Sesiones: {n_sesiones}")
+    print(f"\nAlumnos evaluados: {len(alumnos)} | Sesiones: {n_sesiones}"
+          + (f" ({duplicadas} duplicadas colapsadas)" if duplicadas else ""))
     print(f"Alumnos con cruce: {con_cruce}")
     print(f"Pares en conflicto: {len(filas)} "
           f"(CRITICOS {criticos} · INVIABLES {inviables} · AJUSTADOS {ajustados})")
 
+    if descartados:
+        print(f"Pares descartados (mismo curso y misma sede): {descartados}")
     if filas:
         print("\nDías más afectados:",
               ", ".join(f"{d} ({n})" for d, n in
@@ -612,13 +641,15 @@ def main():
               ", ".join(f"{c} ({n})" for c, n in cursos_top.most_common(5)))
 
         try:
-            generar_excel(salida, filas, alumnos, n_sesiones)
+            generar_excel(salida, filas, alumnos, n_sesiones,
+                          duplicadas, descartados)
         except PermissionError:
             # Excel tiene el archivo abierto: guardar con sello de hora.
             salida = salida.with_name(
                 salida.stem + "_" + datetime.now().strftime("%H%M%S") +
                 salida.suffix)
-            generar_excel(salida, filas, alumnos, n_sesiones)
+            generar_excel(salida, filas, alumnos, n_sesiones,
+                          duplicadas, descartados)
             print("⚠ El destino estaba bloqueado (¿abierto en Excel?): "
                   "se guardó con sello de hora.")
         print(f"\n✓ Reporte: {salida} "
