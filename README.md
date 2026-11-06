@@ -79,6 +79,9 @@ python scripts/validar_base.py ruta/OPTIONAL.xlsx
 # Genera cruces_horario.xlsx (RESUMEN, CRUCES DETALLE, ALUMNOS AFECTADOS,
 # POR DIA, POR SEDES, POR CURSO, MATRIZ VIAJES). Zonas y tiempos de viaje
 # de Lima configurables en ZONA_SEDE / TRAVEL_ZONAS.
+# Filas duplicadas (misma asignación, con o sin código de curso) se
+# colapsan a una sesión; un par del mismo curso en la misma sede no se
+# reporta (es la misma clase, no un cruce).
 python scripts/cruces_horario.py ruta/OPTIONAL.xlsx [salida.xlsx]
 
 # QRs: sticker banner + poster (batería zxing integrada, ECC H)
